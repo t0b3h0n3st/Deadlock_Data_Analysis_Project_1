@@ -7,11 +7,23 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
+# install.packages("ggplot2")
+install.packages("")
 ```
 
 ## Background
-Dead
+
+Introduce the topic and provide relevant background.
+Explain why the topic is interesting or important to you.
+Introduce the dataset and its source.
+Identify the variables that are important for your analysis.
+Clearly state your research question(s).
+Explain what you hope to learn from the data.
+
+Deadlock is a third-person shooter and multiplayer online battle arena (MOBA), which is currently in active development and in an active, invite-only closed beta phase right now. The game is the work of Valve. If you don't know Valve, they are the company that created the platform Steam, which hosts many PC games. They are also know for their other works, the Half-Life series, Counter-Strike, the Portal series, and more.
+
+I am currently obsessed with this game and wanted to work with it some how for this project. While looking for data sets to explore, I found an API that hosts active player statistics for the game. 
+
 
 ```{r }
 deadlock_data <- read.csv("hero_stats_by_rank_subrank_and_date.csv")
