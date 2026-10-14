@@ -7,13 +7,15 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
 ```
 
 ## Background
-
+Dead
 
 ```{r }
-
+deadlock_data <- read.csv("hero_stats_by_rank_subrank_and_date.csv")
+deadlock_data_bans <- read.csv("hero_bans_by_rank_subrank_and_date.csv")
 ```
 
 ## Data Wrangling and Cleaning
