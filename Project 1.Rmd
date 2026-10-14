@@ -1,0 +1,46 @@
+---
+title: 'Project 1: Deadlock'
+author: "Tiana Nguyen"
+date: "2026-10-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+
+```{r }
+
+```
+
+## Data Wrangling and Cleaning
+
+```{r }
+
+```
+
+## Data Analysis
+
+### Problem 1
+```{r }
+
+```
+
+### Problem 2
+
+```{r }
+
+```
+
+
+### Problem 3
+
+```{r }
+
+```
+
+## Summary
+
