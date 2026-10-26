@@ -1,5 +1,5 @@
 ---
-title: 'Project 1: Deadlock'
+title: 'Project 1: Deadlock Meta Analysis'
 author: "Tiana Nguyen"
 date: "2026-10-14"
 output: html_document
@@ -7,8 +7,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-# install.packages("ggplot2")
-install.packages("")
+#install.packages("ggplot2")
+#install.packages("gganimate")
+#install.packages("animation")
+#install.packages("gapminder")
+#install.packages("viridis")
+#install.packages("dplyr")
+#install.packages("scales")
+#install.packages("gifski")
 ```
 
 ## Background
@@ -22,35 +28,148 @@ Explain what you hope to learn from the data.
 
 Deadlock is a third-person shooter and multiplayer online battle arena (MOBA), which is currently in active development and in an active, invite-only closed beta phase right now. The game is the work of Valve. If you don't know Valve, they are the company that created the platform Steam, which hosts many PC games. They are also know for their other works, the Half-Life series, Counter-Strike, the Portal series, and more.
 
-I am currently obsessed with this game and wanted to work with it some how for this project. While looking for data sets to explore, I found an API that hosts active player statistics for the game. 
+I am currently obsessed with this game and wanted to work with it some how for this project. While looking for data sets to explore, I found an API that hosts active player statistics for the game which is where my data sets come from. It is especially fitting to do my project about this topic because there was a very recent major patch for the game, which added six new characters.
 
 
-```{r }
-deadlock_data <- read.csv("hero_stats_by_rank_subrank_and_date.csv")
-deadlock_data_bans <- read.csv("hero_bans_by_rank_subrank_and_date.csv")
+```{r datasetup, echo=FALSE}
+#install.packages(c("tidyverse", "plotly", "gganimate", "gifski", "ggimage", "jsonlite", "magick"))
+library(tidyverse)
+library(plotly)
+library(gganimate)
+library(ggimage)     # geom_image(): hero icons as points in ggplot / gganimate
+library(jsonlite)
+library(magick)
+
+
 ```
 
 ## Data Wrangling and Cleaning
 
-```{r }
+A lot of the data wrangling was requesting data from the API; however, we can further clean the data that was given to us. To preface, this data was requested on October 26th. This after 
 
+```{r dataclean, echo=TRUE}
+stats <- read_csv("hero_stats_by_rank_subrank_and_date.csv")
+bans  <- read_csv("hero_bans_by_rank_subrank_and_date.csv")
+
+combined <- stats %>%
+  select(hero_id, hero_name, bucket, badge, rank_tier, rank_name, subrank,
+         wins, losses, matches, matches_per_bucket) %>%
+  full_join(select(bans, hero_id, bucket, badge, bans),
+            by = c("hero_id", "bucket", "badge")) %>%
+  mutate(bans = replace_na(bans, 0),
+         across(c(wins, losses, matches), ~ replace_na(.x, 0)),
+         date = as_date(as_datetime(bucket))) %>%
+  group_by(badge, date) %>%
+  mutate(matches_per_bucket = max(matches_per_bucket, na.rm = TRUE),
+         total_bans = sum(bans),
+         ban_share = if_else(total_bans > 0, bans / total_bans, NA_real_),
+         pick_rate = matches / matches_per_bucket,
+         win_rate = if_else(matches > 0, wins / matches, NA_real_),
+         bans_per_100_games = 100 * bans / (matches_per_bucket / 12)) %>%
+  ungroup()
+
+
+```
+
+```{r heroIcons, echo=FALSE}
+heroes_raw <- fromJSON("https://api.deadlock-api.com/v1/assets/heroes", flatten = TRUE)
+img_cols <- names(heroes_raw)[str_detect(names(heroes_raw), "^images\\.")]
+
+preferred <- c("images,icon_hero_card", "images.icon_image_small", "images.selection_image", "images.minimap_image")
+
+img_col <- c(intersect(preferred, img_cols), img_cols)[1]
+
+dir.create("hero_icons", showWarnings = FALSE)
+
+icons <- heroes_raw %>%
+  transmute(hero_id = id, icon_url = .data[[img_col]]) %>%
+  filter(!is.na(icon_url)) %>%
+  mutate(icon_file = file.path("hero_icons", paste0(hero_id, ".png")))
+
+walk2(icons$icon_url, icons$icon_file, function(u, f) {
+  if (!file.exists(f)) {
+    tmp <- tempfile()
+    try({
+      download.file(u, tmp, mode = "wb", quiet = TRUE)
+      image_read(tmp) %>% image_scale("96x96") %>% image_write(f, format = "png")
+    }, silent = TRUE)
+  }
+})
+icons <- icons %>% filter(file.exists(icon_file))
+
+```
+
+```{r functions, echo=TRUE}
+icon_scatter <- function(df, xvar, yvar, xlab, ylab, title, sx = 0.05, sy = 0.075) {
+  df <- df %>% filter(!is.na(icon_url))
+  x <- df[[xvar]]; y <- df[[yvar]]
+  xr <- diff(range(x)); yr <- diff(range(y))
+
+  imgs <- pmap(list(x, y, df$icon_url), function(xx, yy, u) {
+    list(source = u, xref = "x", yref = "y", x = xx, y = yy,
+         sizex = xr * sx, sizey = yr * sy,
+         xanchor = "center", yanchor = "middle", layer = "above")
+  })
+
+  hover <- paste0(df$hero_name, "<br>", xlab, ": ", signif(x, 3),
+                  "<br>", ylab, ": ", signif(y, 3))
+
+  plot_ly(x = x, y = y, type = "scatter", mode = "markers",
+          marker = list(size = 20, opacity = 0.01),
+          text = hover, hoverinfo = "text") %>%
+    layout(title = title,
+           xaxis = list(title = xlab, range = c(min(x) - xr * 0.1, max(x) + xr * 0.1)),
+           yaxis = list(title = ylab, range = c(min(y) - yr * 0.1, max(y) + yr * 0.1)),
+           images = imgs)
+}
+
+hero <- combined %>%
+  group_by(hero_id, hero_name) %>%
+  summarise(matches = sum(matches),
+            wins = sum(wins),
+            bans = sum(bans), .groups = "drop") %>%
+  mutate(win_rate = wins / matches,
+         pick_rate = matches / sum(matches),
+         ban_share = bans / sum(bans)) %>%
+  left_join(icons, by = "hero_id") %>%
+  filter(!is.na(hero_name))
 ```
 
 ## Data Analysis
 
-### Problem 1
+### Pick Rate & Ban Rate vs Win Rate of Heros
 ```{r }
+icon_scatter(hero, 
+             "pick_rate", 
+             "win_rate", 
+             "Pick rate (share of all picks)",
+             "Win rate",
+             "Pick rate vs win rate") %>%
+  layout(shapes = list(list(type = "line",
+                            x0=0,x1=1, y0=0.5, y1=0.5,
+                            line = list(dash = "dash", color = "grey"))))
+
+icon_scatter(hero,
+             "ban_share",
+             "win_rate",
+             "Ban rate (share of all picks)",
+             "Win rate",
+             "Ban rate vs win rate") %>%
+  layout(shapes = list(list(type = "line",
+                            x0=0,x1=1, y0=0.5, y1=0.5,
+                            line = list(dash = "dash", color = "grey"))))
 
 ```
 
-### Problem 2
+### Problem 2: 
 
 ```{r }
+
 
 ```
 
 
-### Problem 3
+### Problem 3: 
 
 ```{r }
 
