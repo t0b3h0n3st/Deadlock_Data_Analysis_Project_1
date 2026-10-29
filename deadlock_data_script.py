@@ -11,7 +11,6 @@ MATCH_MODE = None                    # e.g. "ranked" for ranked only; None = API
 now = int(time.time())
 MIN_TS = now - DAYS_BACK * 86400
 
-# Tier names as I understand them; verify against https://api.deadlock-api.com/v1/assets/ranks
 RANK_NAMES = {1: "Initiate", 2: "Seeker", 3: "Alchemist", 4: "Arcanist",
               5: "Ritualist", 6: "Emissary", 7: "Archon", 8: "Oracle",
               9: "Phantom", 10: "Ascendant", 11: "Eternus"}

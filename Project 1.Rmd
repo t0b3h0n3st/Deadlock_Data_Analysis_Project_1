@@ -2,11 +2,15 @@
 title: 'Project 1: Deadlock Meta Analysis'
 author: "Tiana Nguyen"
 date: "2026-10-14"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 #install.packages("ggplot2")
 #install.packages("gganimate")
 #install.packages("animation")
@@ -36,7 +40,7 @@ I am currently obsessed with this game and wanted to work with it some how for t
 library(tidyverse)
 library(plotly)
 library(gganimate)
-library(ggimage)     # geom_image(): hero icons as points in ggplot / gganimate
+library(ggimage)     
 library(jsonlite)
 library(magick)
 
@@ -45,7 +49,7 @@ library(magick)
 
 ## Data Wrangling and Cleaning
 
-A lot of the data wrangling was requesting data from the API; however, we can further clean the data that was given to us. To preface, this data was requested on October 26th. This after 
+A lot of the data wrangling was requesting data from the API; however, we can further clean the data that was given to us. To preface, this data was requested on October 26th. This after all the new characters were released.
 
 ```{r dataclean, echo=TRUE}
 stats <- read_csv("hero_stats_by_rank_subrank_and_date.csv")
@@ -71,7 +75,7 @@ combined <- stats %>%
 
 ```
 
-```{r heroIcons, echo=FALSE}
+```{r heroIcons, echo=TRUE}
 heroes_raw <- fromJSON("https://api.deadlock-api.com/v1/assets/heroes", flatten = TRUE)
 img_cols <- names(heroes_raw)[str_detect(names(heroes_raw), "^images\\.")]
 
@@ -137,8 +141,10 @@ hero <- combined %>%
 
 ## Data Analysis
 
-### Pick Rate & Ban Rate vs Win Rate of Heros
-```{r }
+### Overall Look
+
+#### Pick rate
+```{r pickrate, echo=TRUE}
 icon_scatter(hero, 
              "pick_rate", 
              "win_rate", 
@@ -149,6 +155,11 @@ icon_scatter(hero,
                             x0=0,x1=1, y0=0.5, y1=0.5,
                             line = list(dash = "dash", color = "grey"))))
 
+```
+
+#### Ban Rate
+
+```{r banrate, echo=TRUE}
 icon_scatter(hero,
              "ban_share",
              "win_rate",
@@ -158,22 +169,33 @@ icon_scatter(hero,
   layout(shapes = list(list(type = "line",
                             x0=0,x1=1, y0=0.5, y1=0.5,
                             line = list(dash = "dash", color = "grey"))))
-
 ```
 
-### Problem 2: 
-
+### Current Patch Meta: 
+filter by patch
 ```{r }
 
 
 ```
 
 
-### Problem 3: 
+### Current Patch Meta by Rank: 
+filter by rank
 
 ```{r }
 
 ```
+
+
+### Average deaths per character per rank:
+
+for fun: average deaths per character per rank
+
+
+```{r }
+
+```
+
 
 ## Summary
 
