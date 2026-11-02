@@ -11,14 +11,8 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
-#install.packages("ggplot2")
-#install.packages("gganimate")
-#install.packages("animation")
-#install.packages("gapminder")
-#install.packages("viridis")
-#install.packages("dplyr")
-#install.packages("scales")
-#install.packages("gifski")
+#install.packages(c("tidyverse", "plotly", "jsonlite", "magick"))
+
 ```
 
 ## Background
@@ -30,20 +24,16 @@ Identify the variables that are important for your analysis.
 Clearly state your research question(s).
 Explain what you hope to learn from the data.
 
-Deadlock is a third-person shooter and multiplayer online battle arena (MOBA), which is currently in active development and in an active, invite-only closed beta phase right now. The game is the work of Valve. If you don't know Valve, they are the company that created the platform Steam, which hosts many PC games. They are also know for their other works, the Half-Life series, Counter-Strike, the Portal series, and more.
+Deadlock is a third-person shooter and multiplayer online battle arena (MOBA), which is currently in active development and in an active, invite-only closed beta phase right now. The game is the work of Valve. If you don't know Valve, they are the company that created the platform Steam, which hosts many PC games. They are also know for their other works: the Half-Life series, Counter-Strike, the Portal series, and more.
 
 I am currently obsessed with this game and wanted to work with it some how for this project. While looking for data sets to explore, I found an API that hosts active player statistics for the game which is where my data sets come from. It is especially fitting to do my project about this topic because there was a very recent major patch for the game, which added six new characters.
 
 
 ```{r datasetup, echo=FALSE}
-#install.packages(c("tidyverse", "plotly", "gganimate", "gifski", "ggimage", "jsonlite", "magick"))
 library(tidyverse)
 library(plotly)
-library(gganimate)
-library(ggimage)     
 library(jsonlite)
 library(magick)
-
 
 ```
 
@@ -143,7 +133,48 @@ hero <- combined %>%
 
 ### Overall Look
 
+```{r rankprep, echo=TRUE}
+
+min_matches <- 200
+
+rank_levels <- stats %>%
+  filter(!is.na(rank_tier)) %>%
+  distinct(rank_tier, rank_name) %>%
+  arrange(rank_tier) %>%
+  pull(rank_name)
+
+hero_rank <- stats %>%
+  filter(!is.na(rank_tier), !is.na(hero_name)) %>%
+  group_by(hero_id, hero_name, rank_tier, rank_name) %>%
+  summarise(across(c(wins, matches, total_kills, total_deaths, total_assists,
+                     total_net_worth, total_last_hits, total_denies,
+                     total_player_damage, total_player_damage_taken,
+                     total_boss_damage, total_shots_hit, total_shots_missed,
+                     total_permanent_buffs, permanent_buff_matches),
+                   ~ sum(.x, na.rm = TRUE)),
+            .groups = "drop") %>%
+  filter(matches >= min_matches) %>%
+  mutate(rank_name = factor(rank_name, levels = rank_levels),
+         win_rate  = wins / matches,
+         kills     = total_kills / matches,
+         deaths    = total_deaths / matches,
+         assists   = total_assists / matches,
+         net_worth = total_net_worth / matches,
+         last_hits = total_last_hits / matches,
+         denies    = total_denies / matches,
+         damage_dealt  = total_player_damage / matches,
+         damage_taken  = total_player_damage_taken / matches,
+         boss_damage   = total_boss_damage / matches,
+         accuracy      = total_shots_hit / (total_shots_hit + total_shots_missed),
+         permanent_buffs = if_else(permanent_buff_matches > 0,
+                                   total_permanent_buffs / permanent_buff_matches,
+                                   NA_real_))
+```
+
 #### Pick rate
+
+talk about how picking a character works
+
 ```{r pickrate, echo=TRUE}
 icon_scatter(hero, 
              "pick_rate", 
@@ -159,6 +190,8 @@ icon_scatter(hero,
 
 #### Ban Rate
 
+talk about how bans work in deadlock
+
 ```{r banrate, echo=TRUE}
 icon_scatter(hero,
              "ban_share",
@@ -171,30 +204,129 @@ icon_scatter(hero,
                             line = list(dash = "dash", color = "grey"))))
 ```
 
-### Current Patch Meta: 
-filter by patch
-```{r }
 
 
+
+
+
+### Character Skill Expression 
+filter by rank, which characters scale with rank?
+
+#### Character Win Rate by 
+```{r skillslope, echo=TRUE, fig.height=9, fig.width=8}
+slopes <- hero_rank %>%
+  group_by(hero_id, hero_name) %>%
+  filter(n() >= 5) %>%                       
+  summarise(slope = unname(coef(lm(win_rate ~ rank_tier, weights = matches))[2]),
+            total_matches = sum(matches),
+            .groups = "drop") %>%
+  mutate(slope_pp = slope * 100,              
+         trend = if_else(slope_pp >= 0, "Scales up with rank", "Falls off with rank"))
+
+ggplot(slopes, aes(x = slope_pp, y = reorder(hero_name, slope_pp), fill = trend)) +
+  geom_col() +
+  geom_vline(xintercept = 0, color = "grey30") +
+  scale_fill_manual(values = c("Scales up with rank" = "#2a9d8f",
+                               "Falls off with rank" = "#e76f51")) +
+  labs(title = "Win rate change per rank tier",
+       x = "Change in win rate per rank tier (percentage points)",
+       y = NULL, fill = NULL) +
+  theme_minimal()
+```
+
+#### A Closer Look
+
+```{r skilllines, echo=TRUE, fig.width=9, fig.height=5}
+extremes <- bind_rows(slice_max(slopes, slope, n = 4),
+                      slice_min(slopes, slope, n = 4)) %>%
+  pull(hero_id)
+
+hero_rank %>%
+  filter(hero_id %in% extremes) %>%
+  left_join(select(slopes, hero_id, trend), by = "hero_id") %>%
+  ggplot(aes(rank_name, win_rate, group = hero_name, color = hero_name)) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey") +
+  geom_line(linewidth = 1) + geom_point() +
+  facet_wrap(~ trend) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Win rate by rank: top 4 risers and top 4 fallers",
+       x = NULL, y = "Win rate", color = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
 
-### Current Patch Meta by Rank: 
-filter by rank
+### 
 
-```{r }
+looking at what factors in the game make it more likely to win at higher ranks
+compare soul count, buffs, denies, etc between winning and losing
 
+```{r stats, echo=TRUE, fig.width=10, fig.height=10}
+stat_labels <- c(net_worth = "Souls (net worth)", denies = "Denies", last_hits = "Last hits",
+                 permanent_buffs = "Permanent buffs", kills = "Kills", deaths = "Deaths",
+                 assists = "Assists", damage_dealt = "Player damage dealt",
+                 damage_taken = "Player damage taken", boss_damage = "Boss damage",
+                 accuracy = "Shot accuracy")
+
+rank_avgs <- hero_rank %>%
+  group_by(rank_tier, rank_name) %>%
+  summarise(net_worth       = sum(total_net_worth) / sum(matches),
+            denies          = sum(total_denies) / sum(matches),
+            last_hits       = sum(total_last_hits) / sum(matches),
+            permanent_buffs = sum(total_permanent_buffs) / sum(permanent_buff_matches),
+            kills           = sum(total_kills) / sum(matches),
+            deaths          = sum(total_deaths) / sum(matches),
+            assists         = sum(total_assists) / sum(matches),
+            damage_dealt    = sum(total_player_damage) / sum(matches),
+            damage_taken    = sum(total_player_damage_taken) / sum(matches),
+            boss_damage     = sum(total_boss_damage) / sum(matches),
+            accuracy        = sum(total_shots_hit) / (sum(total_shots_hit) + sum(total_shots_missed)),
+            .groups = "drop") %>%
+  pivot_longer(all_of(names(stat_labels)), names_to = "stat", values_to = "value") %>%
+  mutate(stat = factor(stat_labels[stat], levels = stat_labels))
+
+ggplot(rank_avgs, aes(rank_name, value, group = 1)) +
+  geom_line(linewidth = 1, color = "#264653") +
+  geom_point(size = 2, color = "#264653") +
+  facet_wrap(~ stat, scales = "free_y", ncol = 3) +
+  labs(title = "Average per-match stats by rank",
+       x = NULL, y = "Average per match") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
+```{r factors, echo=TRUE, fig.width=10, fig.height=5}
 
-### Average deaths per character per rank:
+wcor <- function(x, y, w) {
+  ok <- !is.na(x) & !is.na(y)
+  if (sum(ok) < 5) return(NA_real_)
+  cov.wt(cbind(x[ok], y[ok]), wt = w[ok] / sum(w[ok]), cor = TRUE)$cor[1, 2]
+}
 
-for fun: average deaths per character per rank
+stat_labels <- c(net_worth = "Souls (net worth)", denies = "Denies", last_hits = "Last hits",
+                 permanent_buffs = "Permanent buffs", kills = "Kills", deaths = "Deaths",
+                 assists = "Assists", damage_dealt = "Player damage dealt",
+                 damage_taken = "Player damage taken", boss_damage = "Boss damage",
+                 accuracy = "Shot accuracy")
 
+factor_cor <- hero_rank %>%
+  select(hero_name, rank_tier, rank_name, matches, win_rate, all_of(names(stat_labels))) %>%
+  pivot_longer(all_of(names(stat_labels)), names_to = "stat", values_to = "value") %>%
+  group_by(rank_tier, rank_name, stat) %>%
+  summarise(cor = wcor(value, win_rate, matches), .groups = "drop") %>%
+  mutate(stat = factor(stat_labels[stat], levels = rev(stat_labels)))
 
-```{r }
-
+ggplot(factor_cor, aes(rank_name, stat, fill = cor)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(cor, 2)), size = 3) +
+  scale_fill_gradient2(low = "#e76f51", mid = "white", high = "#2a9d8f",
+                       midpoint = 0, limits = c(-1, 1), na.value = "grey90") +
+  labs(title = "Correlation between each stat and hero win rate, by rank",
+       x = NULL, y = NULL, fill = "Correlation") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+
 
 
 ## Summary
