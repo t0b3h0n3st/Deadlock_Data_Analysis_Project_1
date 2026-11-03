@@ -28,40 +28,39 @@ library(magick)
 
 ## Background
 
-**Deadlock** is a third-person shooter and multiplayer online battle arena (MOBA) that is currently in active development and in an invite-only closed beta. The game is the work of **Valve**, the company behind Steam, the Half-Life series, Counter-Strike, Portal, and more. In a match, two teams of six players each pick a different hero and fight to destroy the other side's base. Along the way, players collect "souls," the in-game currency used to buy items and grow stronger. Every hero has their own unique abilities, so the hero you pick matters.
+Deadlock is a third-person shooter and multiplayer online battle arena (MOBA) that is currently in active development and in an invite-only closed beta. The game is the work of Valve, the company behind Steam, the Half-Life series, Counter-Strike, Portal, and more. In a match, two teams of six players each pick a different hero and fight to destroy the other side's base as players collect "souls," the in-game currency used to buy items and grow stronger. Every hero has their own unique abilities.
 
-Throughout this project I will be talking about the game's **meta**, which just means which heroes are the strongest in the current state of the game. The meta changes a lot because the game gets constant patches.
+I will be talking about the game's meta, which just means which heroes are the strongest in the current state of the game. The meta changes a lot because the game gets constant patches, but we will be looking at one particular specific patch.
 
-I am currently obsessed with this game, and I wanted a project where I could look at it the way a data analyst would instead of the way a player does. While looking for data sets to explore, I found a community-run API (**api.deadlock-api.com**) that publishes aggregate match statistics from active players. It is especially fitting to do this project now because a very recent major patch added six new heroes. I requested the data on October 26th, and it covers every match from September 26th to October 26th. Some of the new heroes were not released until partway through that window, so I keep that in mind whenever I compare them to the older heroes.
+I am currently obsessed with this game, and I wanted a project where I could look at it the way a data analyst would instead of the way a player does. While looking for data sets to explore, I found a community-run API (api.deadlock-api.com) that publishes match statistics from active players. It is especially fitting to do this project now because a very recent major patch added six new heroes. I requested the data on October 26th, and the data set covers every ranked match from September 26th to October 26th. Some of the new heroes were not released until partway through that window, so I keep that in mind whenever I compare them to the older heroes.
 
-The data came as two tables:
+![](https://cdn.deadlock.wiki/Map_colored.png){style="display: block; margin: 0 auto;" width="50%"}
 
-- **Hero stats** by hero, rank, and day: wins, losses, matches, and the totals of kills, deaths, assists, net worth (souls), last hits, denies, player damage dealt and taken, boss damage, shots hit and missed, and permanent buffs.
-- **Hero bans** by hero, rank, and day: the number of times each hero was banned in matches.
+The data came as two csv files:
+
+- Hero stats by hero, rank, and day: wins, losses, matches, and the totals of kills, deaths, assists, net worth (souls), last hits, denies, player damage dealt and taken, boss damage, shots hit and missed, and permanent buffs.
+- Hero bans by hero, rank, and day: the number of times each hero was banned in matches.
 
 The variables that matter most for my analysis are the hero, the rank, the date, wins and matches (which give win rate and pick rate), bans, and the per-match stats like deaths, souls, and shot accuracy.
 
 With this data I want to answer three questions:
 
-1. What does the current hero meta look like, and do the most picked and most banned heroes actually win the most?
+1. What does the current hero meta look like, and do the most picked or most banned heroes win the most?
 2. Which heroes get better as players climb in rank, and which ones fade?
 3. What changes about how people play as they get better, and which stats go along with winning?
 
-I hope what I learn here helps me get better as a player.
+I hope what I learn through this project helps me get better as a player.
 
 ## Data Wrangling and Cleaning
 
-The API data arrived as two separate tables, so most of the wrangling was getting the two tables into one consistent structure and turning raw counts of matches into rates I can compare. 
+When I request data from the API, the data comes in two data sets. Most of the wrangling was getting the two tables into one consistent structure and turing raw coutns of matches into rates that I can compare.
 
-**What I did and why:**
-
-- **Selected only relevant columns.** The stats file has more than 30 columns. For the meta analysis I kept identifiers, ranks, and win/loss/match counts; the full set of per-match stats is used later for the rank analysis.
-- **Joined the stats and bans tables.** Bans live in a separate table, so I used a full join on hero, day (`bucket`), and rank (`badge`). A full join keeps rows that exist in only one table. About 99 ban rows (0.03% of all bans) had no matching stats row, so they carry no hero name and are dropped when I summarize by hero. That is too small to matter, but I checked it rather than assuming.
-- **Handled missing values.** After the join, hero-days with no bans have `NA`, which really means zero bans, so I replaced those with 0. Likewise, missing wins, losses, and matches became 0.
-- **Changed variable types.** The API gives time as a Unix timestamp (`bucket`, seconds since 1970), which is unreadable. I converted it to a real date so I can plot and filter by day.
-- **Created new variables.** Raw counts cannot be compared fairly across heroes and ranks, because some ranks have far more games than others. I created **win rate** (wins divided by matches), **pick rate** (a hero's matches divided by all matches, so the numbers sum to 1 across heroes), **ban share** (a hero's bans divided by all bans), and **bans per 100 games**. Because each game has 12 players, I divided matches by 12 to estimate the number of games.
-- **Grouped and summarized.** I rolled the day-by-day, rank-by-rank rows up to one row per hero (for the overall meta plots) and one row per hero per rank (for the rank analysis).
-- **Filtered unreliable observations.** About 35% of the individual hero-rank-day rows come from fewer than 50 matches, which makes their win rates very noisy (one win or loss swings the rate by 2 percentage points). So I never judge a hero from one day. I always aggregate across days first, and for the rank analysis I only keep hero-rank cells with at least **200 matches**.
+- Firstly, I selected only relevant variables in the stats data set. The stats file has more than 30 variables that are tracked. For the meta analysis, I kept identifiers, ranks, and win/loss/match counts. 
+- Then, I joined the stats and bans tables. The bans data was in a separate csv when I requested the data, so I used a full join on hero, day (`bucket`), and rank (`badge`). A full join keeps rows that exist in only one table. About 99 ban rows (0.03% of all bans) had no matching stats row, so they carry no hero name and are dropped when I summarize by hero. That is too small to matter, but I checked it rather than assuming.
+- I handled missing values. For example, after the join, hero-days with no bans have `NA`, which really means zero bans, so I replaced those with 0. Likewise, missing wins, losses, and matches became 0.
+- Changing variable types to make them more legible. The API gives time as a Unix timestamp (`bucket`), which is unreadable. I converted it to a real date so I can plot and filter by day.
+- Then, I created new variables, since raw counts cannot be compared fairly across heroes and ranks because some ranks have far more games than others. I created win rate (wins divided by matches), pick rate (a hero's matches divided by all matches, so the numbers sum to 1 across heroes), ban share (a hero's bans divided by all bans), and bans per 100 games. Because each game has 12 players, I divided matches by 12 to estimate the number of games.
+- Filtering unreliable observations. About 35% of the individual hero-rank-day rows come from fewer than 50 matches, which makes their win rates very noisy. So I never judge a hero from one day. I always aggregate across days first, and for the rank analysis I only keep hero-rank cells with at least 200 matches.
 
 ```{r dataclean, echo=TRUE}
 stats <- read_csv("hero_stats_by_rank_subrank_and_date.csv")
@@ -211,7 +210,7 @@ I'll start with the big picture. Which heroes do players pick, which do they ban
 
 #### Pick rate
 
-Before a match starts, every player picks one hero, so **pick rate** shows how often the community chooses each hero. A high pick rate can mean a hero is strong, fun, easy to play, or simply new and exciting, and a low win rate with a high pick rate suggests players like the hero more than the results justify.
+Before a match starts, every player picks one hero, so pick rate shows how often the community chooses each hero. A high pick rate can mean a hero is strong, fun, easy to play, or simply new and exciting, and a low win rate with a high pick rate suggests players like the hero more than the results justify.
 
 ```{r pickrate, echo=TRUE}
 icon_scatter(hero, 
@@ -225,11 +224,12 @@ icon_scatter(hero,
                             line = list(dash = "dash", color = "grey"))))
 
 ```
-Each icon is a hero, and the dashed line is a 50% win rate. The most important thing to notice is that **Rat King, one of the six new heroes, sits alone in the top right corner**: it is the single most picked hero (about 5.7% of all picks) *and* has the highest win rate (about 55.8%). Right behind it, Haze is the second most picked hero (4.8%) with a 52.9% win rate.
+
+Each icon is a hero, and the dashed line is a 50% win rate. I will point out the obvious first. The clear outliers are Rat King and Haze, where their win rate and pick rate are both a lot higher compared to every other heroes. The win rate itself shows how much stronger these characters are. The pick rate shows the amount of people who enjoy playing those characters.
 
 #### Ban Rate
 
-Players can **ban** heroes before the match, which removes them from the game, so a hero's ban share is a measure of how much the community is afraid of (or annoyed by) it. I show ban share only for the 38 heroes that have ban records.
+Players can ban heroes before the match, which removes them from the match, so a hero's ban share is a measure of how much the community is afraid of (or annoyed by) it. A reminder that the new characters - Rat King, Baba, Violet, Nurse Harrow, Deadman Danny, and Soloman - cannot be banned during this time period. Valve made this choice on purpose, so they can see how these heroes' kits play out and balance them more accurately in future patches.
 
 ```{r banrate, echo=TRUE}
 icon_scatter(hero,
@@ -243,16 +243,11 @@ icon_scatter(hero,
                             line = list(dash = "dash", color = "grey"))))
 ```
 
-**What this shows.** Haze is the most banned hero by a clear margin (7.6% of all bans), followed by The Doorman (5.8%), Bebop (5.7%), Celeste (5.6%), and Wraith (5.1%). It doesn't seem like there is any correlation between ban rates and win rates of heroes. 
-
-**The Doorman is the standout example.** It is the second most banned hero, yet it wins just 46.0% of games and is only picked in about 1.2% of matches. Players are not banning it because it is winning; they are banning it because it is frustrating to play against, or because it is strong in the hands of a few specialists. By contrast, Graves wins 55.1% and Paige wins 55.0%, but they are banned much less than their strength would suggest (Paige: 1.3% of bans).
-
-**Note:** The newer heroes can't be banned during this patch. Valve made this choice on purpose so they can see how these heroes' kits play out and balance them more accurately.
-
+Here, Haze seems to have a very high ban rate, which reinforces the idea that she is very strong. However, the following heros with higer ban rates are Doorman, Bebop, Celeste, and Wraith. There doesn't seem to be any correlation between ban rate and win rate of heroes. Rather than ban rate indicating the strength of a character, it is possible that the ban rate shows how annoying players find those characters to play against. From first-hand experience, I can attest that these characters are very frustrating to go up against.
 
 ### Character Skill Expression 
 
-Some heroes are easy to pick up, while others take hours to master. If a hero is *hard to master*, its win rate should be low at low ranks and climb at high ranks. I measured this by fitting a straight line to each hero's win rate across the 11 ranks (weighted by the number of matches), so that the slope is the change in win rate for each step up the ranked ladder.
+I would definitely say that some heroes are a lot easier to pick up than other. There are a lot of characters that take a lot more practice and have a lot more skill expression. I wanted to see if I could measured this by graphing the change in win rate based on rank.
 
 #### Character Win Rate by 
 ```{r skillslope, echo=TRUE, fig.height=9, fig.width=8}
@@ -275,12 +270,13 @@ ggplot(slopes, aes(x = slope_pp, y = reorder(hero_name, slope_pp), fill = trend)
        y = NULL, fill = NULL) +
   theme_minimal()
 ```
-Every bar is how many percentage points a hero's win rate changes for each step up the ladder. **Celeste is the clearest "skill-rewarding" hero**, gaining about 0.68 points per rank (her win rate goes from about 48.0% at low ranks to 52.2% at high ranks), followed by Holliday, Yamato, Vyper, Mina, and Wraith. At the other extreme, Deadman Danny loses about 0.57 points per rank, and Victor, Lady Geist, Apollo, and Violet also decline. These fading heroes are likely strong against players who do not know how to counter them, but get found out by better opponents.
+
+Every bar is how many percentage points a hero's win rate changes for each rank. Celeste is the clearest "skill-rewarding" hero, gaining about 0.68 points per rank (her win rate goes from about 48.0% at low ranks to 52.2% at high ranks), followed by Holliday, Yamato, Vyper, Mina, and Wraith. At the other hand, Deadman Danny loses about 0.57 points per rank, and Victor, Lady Geist, Apollo, and Violet also decline. These fading heroes are likely strong against players who do not know how to counter them, but get countered by better opponents.
 
 
 #### A Closer Look
 
-To see this more clearly, here are the four heroes that climb the most and the four that fall the most, with their win rate at every rank.
+To take a look at the trend closer, I plotted the win rates of the 4 top characters and 4 bottom characters.
 
 ```{r skilllines, echo=TRUE, fig.width=9, fig.height=5}
 extremes <- bind_rows(slice_max(slopes, slope, n = 4),
@@ -301,11 +297,10 @@ hero_rank %>%
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-The line chart makes the two groups concrete: the risers climb steadily from below 50% to above it, while the fallers slide from comfortable win rates down toward or below 50%.
 
 ### Learning How to Play Better
 
-A natural question for any competitive game is: *what does getting better actually look like?* The stats file records totals of what players did in each match, so I can divide by the number of matches to get the average match at each rank and compare Initiate players to Eternus players. Each panel below is one statistic, and the lines run from the lowest rank (left) to the highest (right). Each panel has its own y-axis because the stats are on very different scales (souls are in the tens of thousands, deaths are single digits).
+I also wanted to look at what factors into winning a game by looking at the correlation between win rate and what a player does during a game. The stats file records totals of what players did in each match, so I can divide by the number of matches to get the average match at each rank and compare Initiate players to Eternus players. Each panel below is one statistic, and the lines run from the lowest rank (left) to the highest (right). Keep in mind that each graph has different y-axes, so the scaling can exaggerate some measuresments.
 
 ```{r stats, echo=TRUE, fig.width=10, fig.height=10}
 stat_labels <- c(net_worth = "Souls (net worth)", denies = "Denies", last_hits = "Last hits",
@@ -341,24 +336,18 @@ ggplot(rank_avgs, aes(rank_name, value, group = 1)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-Taken together, the panels say that better players play *cleaner and more efficiently*, not flashier:
+Taken together, the panels say that better players play cleaner and more efficiently.
 
-- **Aim improves steadily.** Shot accuracy rises as we get to higher ranks. This is the single most consistent improvement on the chart, and it never reverses.
-- **Players die less.** Deaths fall from about 6.95 per match at Initiate to 5.91 at Phantom, a drop of roughly 15%. Deaths tick back up to about 6.12 at Eternus, which makes sense because everyone you face at the top rank is also very good. 
-- **Fights get smaller, but more coordinated.** Kills, player damage dealt, and damage taken mostly decline with rank (damage dealt falls from about 36,600 to 31,100 per match). At the same time, assists rise at the very top, from a low of about 12.4 at Emissary to 13.5 at Eternus. That suggests more players are contributing to each kill in high-rank fights.
-- **Objectives matter more.** Boss damage rises from about 6,400 at Initiate to about 7,100 at Ascendant, a gain of roughly 10%, so better players spend more of their match pushing objectives.
-- **Souls go down, not up.** Net worth falls about 22% (from about 44,000 to 34,500 per match), and denies (3.4 to 2.7) and last hits (172 to 142) fall too. This is the surprising result, because we usually think better players earn more. My best explanation is that high-rank matches end sooner, so players have less time to collect souls, which fits with players dying less and pushing objectives harder. The data has no match duration, so this is a hypothesis, not a proven result.
-- **Permanent buffs rise, then fall.** They climb from about 22 at Initiate to a peak of about 28 around Archon, then slip back to about 25 at Eternus. A plausible reason is that mid-ranked players have long enough games to collect many buffs, while the shortest high-rank games leave less time, but again I cannot test that here.
+- Aim improves as we get to higher ranks as you can see from the last graph measuring average shot accuracy. This is the single most consistent improvement on the chart, and it never reverses.
+- It seems like fights get smaller, but more coordinated as we get higher in rank. Kills, player damage dealt, and damage taken mostly decline with rank (damage dealt falls from about 36,600 to 31,100 per match). At the same time, assists rise at the very top, from a low of about 12.4 at Emissary to 13.5 at Eternus. That suggests more players are contributing to each kill in high-rank fights.
+- Objectives, which are the towers/guardians that are in lane, matter a lot more at high ranks. Boss damage rises from about 6,400 at Initiate to about 7,100 at Ascendant, a gain of roughly 10%, so better players spend more of their match pushing objectives.
+- An interesting observation that you might notice is how soul net worth from player to player decreases as we get to higher ranks. Net worth falls, and so do denies and last hits fall too. This is surprising because we usually think better players earn more. My best explanation is that high-rank matches end sooner, so players have less time to collect souls, which fits with players dying less and pushing objectives harder. This is only a hypothesis with no data to back it up besides what I know about the game and community.
 
-**Sanity checks.** Kills and deaths are almost identical at every rank (6.92 vs 6.95 at Initiate), and damage dealt matches damage taken. Both are what you would expect, since every kill is someone's death and every point of damage is someone's damage taken, so the data is behaving correctly.
-
-**Why it matters.** For a player who wants to climb, the lesson is that the things that improve with rank are *aim and survival*, which are skills a player can practice. Farming more souls is not what separates ranks.
-
-**Caution when reading the panels.** Because each panel has its own y-axis, small changes can look dramatic (accuracy only moves about six points). These averages also pool all 44 heroes, and the mix of heroes differs by rank, so some of the pattern could come from which heroes are played rather than how well they are played.
+For a player who wants to climb in rank, the things to improve on are aim, coordination, and pushing objectives, which are skills a player can practice. However, since this data is aggregate data from all heroes, there would be a lot of "it depends on your hero" situations.
 
 #### Stat Correlations to Win Rate
 
-The last section showed how play changes with rank. This one asks a different question: **at a given rank, do heroes with higher averages of a stat also tend to win more?** For each rank I compared the 44 heroes' average per-match stats to their win rates and calculated the correlation (weighted by matches, so heroes with few games count less). Correlations run from -1 to 1. Green means heroes with more of that stat tend to win more, orange means they tend to win less, and white means no real relationship. As a rough guide, anything around 0.3 or higher is moderate, and values near 0.1 are mostly noise.
+This last section offers a more concise table of how game statistics correlate with win rates at a given rank. For each rank, I compared average per-match stats by hero to their win rates and calculated the correlation (weighted by the number of matches). Correlations run from -1 to 1. Green means heroes with more of that stat tend to win more, orange means they tend to win less, and white means no real relationship. 
 
 ```{r factors, echo=TRUE, fig.width=10, fig.height=5}
 
@@ -392,37 +381,37 @@ ggplot(factor_cor, aes(rank_name, stat, fill = cor)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-- **Boss damage is the strongest signal.** The correlation sits around 0.5 for almost every rank, then drops to about 0.36 at Eternus. Heroes that put more damage into objectives tend to win more, which lines up with the earlier finding that better players push objectives.
-- **Farming matters most at low ranks.** Last hits and souls are moderately positive at Initiate (about 0.5 and 0.4) and fade as ranks go up, down to about 0.1 and 0.2 at Eternus. At the top, being rich matters less for winning.
-- **Dying less matters more as you climb.** Deaths are mildly negative at Initiate (about -0.13) and get more negative, reaching about -0.3 at the middle and upper ranks. This is the same story as the previous section: surviving is a big part of winning.
-- **Raw damage flips sign.** Heroes that deal more player damage win more at Initiate (about +0.31) but win *less* at Eternus (about -0.22). Dealing a lot of damage stops being a sign of a winning hero at high ranks.
-- **Accuracy is negative at every rank (around -0.2).** This looks strange next to the earlier finding that aim improves with rank, but it's comparing *heroes*, not players. Heroes that land a higher share of their shots don't win more, which most likely comes down to how each hero is designed (a hero who relies on abilities will show a different accuracy than one who relies on their gun). It does not mean that good aim is bad.
+A lot of the trends here reinforce what I mentioned prior. However, there are some interesting observations.
 
-**Cautions.** This compares heroes, not players inside a match, so I can't say whether a stat *causes* winning. Some stats are also partly a result of winning. A team that wins its fights collects more souls, so the souls correlation is partly the win showing up in the stat. Heroes also differ by design, so a stat can say more about the kind of hero than about how well it's played.
+- Farming matters most at low ranks. Last hits and souls are moderately positive at Initiate and decrease in correlation as ranks go up. At the top, being rich matters less for winning. I am guessing this is due to how higher rank players are more aware of come-back mechanics and how to take advantage of it.
+- Raw damage flips sign. Heroes that deal more player damage win more at Initiate but win less at Eternus. Dealing a lot of damage stops being a sign of a winning hero at high ranks.
+- Accuracy is negative at every rank. This looks strange next to the earlier finding that aim improves with rank, but it's comparing heroes, not players. Heroes that land a higher share of their shots don't win more, which most likely comes down to how each hero is designed. It does not mean that good aim is bad.
+
+Note: This compares heroes, not players inside a match, so I can't say whether a stat causes winning. Some stats are also partly a result of winning. A team that wins its fights collects more souls, so the souls correlation is partly the win showing up in the stat. Heroes also differ by design, so a stat can say more about the kind of hero than about how well it's played.
+
+![](https://pbs.twimg.com/media/HJahiD3W8AI38-W?format=jpg&name=medium)
 
 ## Summary
 
 ### Major findings and answers to questions
 
-- **The meta is not what the ban list suggests.** Haze is the most banned hero (about 7.6% of bans) and The Doorman is second (5.8%), yet The Doorman wins only about 46% of its games. Bans reflect frustration and fear more than strength (correlation with win rate about 0.29), while picks follow strength more closely (about 0.46).
-- **A brand-new hero ended up on top.** Rat King is the most picked (about 5.7%) and most successful (about 55.8%) hero, even though it was released on October 2, after the data window began. The patch reshaped the meta instead of just adding more options.
-- **Hero strength depends on skill level.** Celeste, Holliday, Yamato, Vyper, Mina, and Wraith get stronger as ranks rise, while Deadman Danny, Victor, Lady Geist, Apollo, and Violet get weaker. The differences are real but modest (the biggest movers shift about 4 percentage points, most much less), so skill matters far more than hero choice.
-- **Higher ranks are cleaner, not richer.** Better players aim more accurately (about 47.6% to 53.5%) and die less (about 6.95 to 5.91 per match), but they earn fewer souls per match, which most likely points to shorter games at high ranks.
-- **What goes with winning changes by rank.** Boss damage is the strongest sign of a winning hero at every rank. Farming (last hits and souls) matters most at low ranks, and avoiding deaths matters more as ranks go up.
+- Neither the pick rate and the ban rate can solely describe which heroes are very strong.
+  - Win rates being greater than 50% might show that hero is stronger than other characters.
+  - Pick rates probably just show how fun players find player that character.
+  - Bans probably track how a hero feels to play against, such as heroes with hard-to-avoid damage or crowd control. 
+- It seems that characters like Celeste and Holliday have a greater skill ceiling, which makes sense if you know their kit.
+  - Heroes that don't do as well at high ranks tend to be heroes with a lower skill ceiling, while heroes that have greater skill expression reward positioning, aim, movement, and game knowledge at higher ranks.
+- To rank up, focus on pushing objectives and not dying. While net soul worth does keep you stronger in game, overall, there is barely any correlation between a greater soul net worth and winning.
 
-### Possible explanations
-
-- Heroes that fade at high ranks may rely on tricks or surprise that better players learn to answer, while heroes that scale reward positioning, aim, and game knowledge that only come with practice.
-- Bans probably track how a hero *feels* to play against, such as heroes with hard-to-avoid damage or crowd control. That would explain why a low-winning hero like The Doorman is banned so often.
 
 ### Limitations
 
-- **Aggregated data.** The API only gives totals per hero, rank, and day, so I can compare heroes but not individual players, or winners versus losers within a match. Hero-level correlations should not be read as causes.
-- **No match length, items, or patch notes.** I can only guess at explanations like shorter matches at high ranks or balance changes during the month.
-- **Short and uneven window.** The data covers one month, and the six new heroes had between 6 and 24 days of data, so their pick rates and win rates aren't directly comparable to the older heroes.
-- **No ban data for the new heroes.** They can't be banned in this patch, so the ban analysis only covers 38 of the 44 heroes.
-- **Small samples in some places.** Top-rank data is thinner (Eternus has about 114,000 hero-matches, compared with over 1 million at Seeker). I required at least 200 matches per hero and rank, but the highest-rank conclusions are still the noisiest.
-- **Closed beta.** The game is still in development, so these results describe one snapshot of the meta and may be out of date after the next patch.
+- The API only gives totals per hero, rank, and day, so I can compare heroes but not individual players, or winners versus losers within a match. Hero-level correlations should not be read as causes.
+- I can only guess at explanations like shorter matches at high ranks since we do not have match length data.
+- The data covers one month, and the six new heroes had between 6 and 24 days of data, so their pick rates and win rates aren't directly comparable to the older heroes.
+- There is no ban data for the new heroes. They can't be banned in this patch, so the ban analysis only covers 38 of the 44 heroes.
+- Top-rank data is thinner (Eternus has about 114,000 hero-matches, compared with over 1 million at Seeker). I required at least 200 matches per hero and rank, but the highest-rank conclusions are still the noisiest.
+- The game is still in development, so these results describe one snapshot of the meta and may be out of date after the next patch.
 
 ### Ideas for future work
 
@@ -432,12 +421,6 @@ ggplot(factor_cor, aes(rank_name, stat, fill = cor)) +
 - Build a regression that predicts win rate from hero, rank, and days since release together, instead of looking at one factor at a time.
 - Compare how each hero's pick and ban rates move by rank to find heroes that are only "feared" at certain skill levels.
 
-### Final conclusions
 
-- **Popularity, fear, and strength are three different things in Deadlock.** The heroes picked most (Rat King, Haze, Infernus), banned most (Haze, The Doorman), and winning most (Rat King, Graves, Paige) only partly overlap, so anyone reading the meta from just one of these will be misled.
-- **The six new heroes reshaped the meta right away.** Within weeks, Rat King was both the most picked and the most successful hero. That shows how much one patch can change a competitive game, and it makes a case for watching the numbers day by day instead of waiting for complaints.
-- **Skill expression is real but small.** Heroes that scale with rank and heroes that fade differ by a few percentage points at most, so for most players, improving aim and survival will matter more than picking the "right" hero.
-- **If you want to climb, pick heroes that scale.** Celeste, Holliday, Yamato, Vyper, Mina, and Wraith keep getting better at higher ranks, while heroes like Deadman Danny and Victor lose ground as opponents improve.
-- **Skill shows up as discipline, not farming.** High-rank players die less and shoot more accurately but collect fewer souls, and the heat map shows that avoiding deaths and pushing objectives matter more for winning than souls at the top. In this game, winning at the top is about efficiency, positioning, and fights, not getting rich the fastest.
-- **The data answers "what," but not always "why."** Many of the most interesting explanations (match length, patch changes, why The Doorman is banned) are hypotheses I couldn't test with aggregated data. That is the biggest reason I'd want richer data for a follow-up project.
-- **Overall takeaway.** Deadlock's community behaves like any competitive community: loud opinions, fast learning, and a meta that changes faster than anyone's intuition. Looking at the numbers instead of the vibes is a good way to find out which opinions hold up.
+
+![Some cute fanart of Baba and Soloman (two of the new characters) by finnmertens on twitter](https://pbs.twimg.com/media/HTb4KuybcAABdYi?format=jpg&name=4096x4096)
